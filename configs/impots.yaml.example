@@ -1,0 +1,27 @@
+# Code General des Impots - Example Configuration Template
+#
+# Copy this file and customize for tax code knowledge graph builds:
+#   cp configs/impots.yaml.example configs/impots.yaml
+#
+# You'll need to create a chunking profile in src/chunkers/profiles/impots.py
+# and register it in src/cli.py's get_chunker() function.
+
+project:
+  name: "Code General des Impots 2026"
+
+chunking:
+  profile: impots            # Create this profile for tax code structure
+  max_chunk_size: 4000
+  min_chunk_size: 500
+
+llm:
+  provider: vllm
+  vllm_url: http://localhost:8000/v1
+  ollama_url: http://localhost:11434
+  model: mistralai/Mistral-7B-Instruct-v0.3
+  embedding_model: nomic-embed-text
+  embedding_dim: 768
+
+# paths:
+#   sources: /path/to/impots/pdfs
+#   output: /path/to/impots/kg

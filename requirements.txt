@@ -1,0 +1,16 @@
+# Core
+lightrag-hku>=0.1.0
+networkx>=3.0
+numpy>=1.24
+PyMuPDF>=1.24.0
+
+# HTTP clients
+httpx>=0.25
+aiohttp>=3.9
+
+# CLI
+click>=8.1
+pyyaml>=6.0
+
+# Logging
+colorama>=0.4

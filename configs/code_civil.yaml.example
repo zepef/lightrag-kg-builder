@@ -1,0 +1,27 @@
+# Code Civil - Example Configuration Template
+#
+# Copy this file and customize for Code Civil knowledge graph builds:
+#   cp configs/code_civil.yaml.example configs/code_civil.yaml
+#
+# You'll need to create a chunking profile in src/chunkers/profiles/code_civil.py
+# and register it in src/cli.py's get_chunker() function.
+
+project:
+  name: "Code Civil 2026"
+
+chunking:
+  profile: code_civil       # Create this profile for Code Civil structure
+  max_chunk_size: 4000
+  min_chunk_size: 500
+
+llm:
+  provider: vllm
+  vllm_url: http://localhost:8000/v1
+  ollama_url: http://localhost:11434
+  model: mistralai/Mistral-7B-Instruct-v0.3
+  embedding_model: nomic-embed-text
+  embedding_dim: 768
+
+# paths:
+#   sources: /path/to/code_civil/pdfs
+#   output: /path/to/code_civil/kg

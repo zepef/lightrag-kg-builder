@@ -1,0 +1,25 @@
+# PCG 2026 - Plan Comptable General Knowledge Graph Build Configuration
+#
+# Usage:
+#   python -m src.cli build --config configs/pcg2026.yaml --sources /path/to/pdfs --output /path/to/kg
+
+project:
+  name: "PCG 2026"
+
+chunking:
+  profile: pcg              # Uses PCG-specific regex patterns and hierarchy
+  max_chunk_size: 4000      # ~1000 tokens per chunk
+  min_chunk_size: 500
+
+llm:
+  provider: vllm
+  vllm_url: http://localhost:8000/v1
+  ollama_url: http://localhost:11434
+  model: mistralai/Mistral-7B-Instruct-v0.3
+  embedding_model: nomic-embed-text
+  embedding_dim: 768
+
+extraction:
+  cleanup_patterns:
+    - ["Plan Comptable G\u00e9n\u00e9ral\\s*\\n", ""]
+    - ["PCG\\s*\u2013\\s*\\d{4}\\s*\\n", ""]
