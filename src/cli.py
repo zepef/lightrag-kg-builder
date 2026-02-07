@@ -559,7 +559,12 @@ def health(vllm_url, ollama_url, embedding_model):
 @click.option('--strategies', default=None,
               help='Comma-separated strategy names (overrides config)')
 @click.option('--system-prompt', default=None, help='System prompt for OpenAI format')
-def generate(config_path, output, fmt, strategies, system_prompt):
+@click.option('--augment', type=int, default=0,
+              help='Generate N paraphrased variants per pair (data augmentation)')
+@click.option('--llm', is_flag=True, default=False,
+              help='Use LLM for augmentation (requires running vLLM/Ollama). Default: template-based')
+@click.option('--vllm-url', default=None, help='vLLM URL for LLM augmentation')
+def generate(config_path, output, fmt, strategies, system_prompt, augment, llm, vllm_url):
     """Generate fine-tuning Q&A pairs from the Knowledge Graph."""
     logging.basicConfig(
         level=logging.INFO,
@@ -593,10 +598,22 @@ def generate(config_path, output, fmt, strategies, system_prompt):
     print("\n" + "=" * 60)
     print("  Fine-Tuning Pair Generator")
     print("=" * 60)
+    augment_method = "LLM" if llm else "template" if augment > 0 else "none"
+
     print(f"  KG Directory:  {output_dir}")
     print(f"  Format:        {format_name}")
     print(f"  Strategies:    {', '.join(strategy_names)}")
+    if augment > 0:
+        print(f"  Augmentation:  {augment}x ({augment_method})")
     print("=" * 60 + "\n")
+
+    # Resolve LLM URL for augmentation
+    if config_path:
+        llm_url = vllm_url or config.vllm_url
+        llm_model = config.llm_model
+    else:
+        llm_url = vllm_url or "http://localhost:8000/v1"
+        llm_model = "mistralai/Mistral-7B-Instruct-v0.3"
 
     generator = FinetuneGenerator(
         kg_dir=output_dir,
@@ -605,6 +622,10 @@ def generate(config_path, output, fmt, strategies, system_prompt):
         format_name=format_name,
         system_prompt=prompt,
         filter_config=filter_config,
+        augment_n=augment,
+        augment_llm=llm,
+        llm_url=llm_url,
+        llm_model=llm_model,
     )
 
     report = generator.run()

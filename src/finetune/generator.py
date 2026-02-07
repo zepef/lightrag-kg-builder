@@ -17,6 +17,7 @@ from .loader import KGLoader
 from .strategies import FTPair, get_strategies
 from .filters import QualityFilter, FilterConfig
 from .formatter import write_jsonl, write_rejected, DEFAULT_SYSTEM_PROMPT
+from .augmenter import get_augmenter
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class GenerationReport:
     total_generated: int = 0
     total_accepted: int = 0
     total_rejected: int = 0
+    augmented_count: int = 0
     per_strategy: Dict[str, Dict] = None
     filter_config: Dict = None
     output_format: str = ""
@@ -40,12 +42,15 @@ class GenerationReport:
             self.filter_config = {}
 
     def to_dict(self) -> dict:
+        # acceptance_rate is based on pre-augmentation filtering
+        pre_augment = self.total_accepted - self.augmented_count
         return {
             "total_generated": self.total_generated,
+            "total_accepted_pre_augment": pre_augment,
             "total_accepted": self.total_accepted,
             "total_rejected": self.total_rejected,
             "acceptance_rate": round(
-                self.total_accepted / max(self.total_generated, 1) * 100, 1
+                pre_augment / max(self.total_generated, 1) * 100, 1
             ),
             "per_strategy": self.per_strategy,
             "filter_config": self.filter_config,
@@ -72,6 +77,10 @@ class FinetuneGenerator:
         format_name: str = "openai",
         system_prompt: str = DEFAULT_SYSTEM_PROMPT,
         filter_config: Optional[FilterConfig] = None,
+        augment_n: int = 0,
+        augment_llm: bool = False,
+        llm_url: str = "http://localhost:8000/v1",
+        llm_model: str = "mistralai/Mistral-7B-Instruct-v0.3",
     ):
         self.kg_dir = Path(kg_dir)
         self.output_dir = Path(output_dir) / "finetune"
@@ -79,6 +88,10 @@ class FinetuneGenerator:
         self.format_name = format_name
         self.system_prompt = system_prompt
         self.filter_config = filter_config or FilterConfig()
+        self.augment_n = augment_n
+        self.augment_llm = augment_llm
+        self.llm_url = llm_url
+        self.llm_model = llm_model
 
     def run(self) -> GenerationReport:
         """Execute the full generation pipeline."""
@@ -139,7 +152,25 @@ class FinetuneGenerator:
                 "acceptance_rate": round(acc / max(generated, 1) * 100, 1),
             }
 
-        # Step 4: Format and write
+        # Step 4: Augmentation (if requested)
+        pre_augment = len(accepted)
+        augmented_count = 0
+        if self.augment_n > 0:
+            method = "LLM" if self.augment_llm else "template"
+            print(f"  Augmenting ({method}, {self.augment_n}x per pair)...")
+            augmenter = get_augmenter(
+                n=self.augment_n,
+                use_llm=self.augment_llm,
+                llm_url=self.llm_url,
+                llm_model=self.llm_model,
+            )
+            accepted = augmenter.augment(accepted)
+            augmented_count = len(accepted) - pre_augment
+            report.total_accepted = len(accepted)
+            report.augmented_count = augmented_count
+            print(f"    {pre_augment} originals + {augmented_count} variants = {len(accepted)} total")
+
+        # Step 5: Format and write
         print(f"  Writing output ({self.format_name} format)...")
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -151,11 +182,19 @@ class FinetuneGenerator:
         rejected_path = self.output_dir / "rejected_pairs.jsonl"
         write_rejected(rejected, rejected_path)
 
-        # Step 5: Write report
+        # Step 6: Write report
         report.duration_ms = int((time.perf_counter() - start) * 1000)
 
         report_dict = report.to_dict()
         report_dict["rejection_reasons"] = dict(rejection_reasons)
+        if self.augment_n > 0:
+            report_dict["augmentation"] = {
+                "n": self.augment_n,
+                "method": "llm" if self.augment_llm else "template",
+                "originals": pre_augment,
+                "variants": augmented_count,
+                "total": len(accepted),
+            }
 
         report_path = self.output_dir / "generation_report.json"
         report_path.write_text(json.dumps(report_dict, indent=2, ensure_ascii=False))
