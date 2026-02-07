@@ -8,7 +8,25 @@ Supports merging config with CLI overrides.
 import yaml
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
+
+
+@dataclass
+class FinetuneConfig:
+    """Configuration for fine-tuning pair generation."""
+    system_prompt: str = (
+        "Tu es un expert-comptable specialise dans le Plan Comptable General (PCG) 2026. "
+        "Tu reponds de maniere precise et pedagogique aux questions de comptabilite francaise."
+    )
+    strategies: List[str] = field(default_factory=lambda: [
+        "entity_def", "relational", "hierarchical", "comparative",
+        "multihop", "chunk_qa", "thematic",
+    ])
+    format: str = "openai"
+    min_answer_length: int = 50
+    max_answer_length: int = 2000
+    min_question_length: int = 10
+    deduplicate: bool = True
 
 
 @dataclass
@@ -36,6 +54,9 @@ class ProjectConfig:
 
     # Extra cleanup patterns for PDF extraction
     cleanup_patterns: list = field(default_factory=list)
+
+    # Fine-tuning
+    finetune: FinetuneConfig = field(default_factory=FinetuneConfig)
 
 
 def load_config(config_path: str) -> ProjectConfig:
@@ -104,6 +125,24 @@ def load_config(config_path: str) -> ProjectConfig:
     extraction = raw.get('extraction', {})
     if extraction.get('cleanup_patterns'):
         config.cleanup_patterns = extraction['cleanup_patterns']
+
+    # Finetune section
+    ft = raw.get('finetune', {})
+    if ft:
+        ftc = config.finetune
+        if ft.get('system_prompt'):
+            ftc.system_prompt = ft['system_prompt']
+        if ft.get('strategies'):
+            ftc.strategies = ft['strategies']
+        if ft.get('format'):
+            ftc.format = ft['format']
+        filters = ft.get('filters', {})
+        if filters.get('min_answer_length') is not None:
+            ftc.min_answer_length = int(filters['min_answer_length'])
+        if filters.get('max_answer_length') is not None:
+            ftc.max_answer_length = int(filters['max_answer_length'])
+        if filters.get('deduplicate') is not None:
+            ftc.deduplicate = bool(filters['deduplicate'])
 
     return config
 

@@ -143,6 +143,12 @@ lightrag-kg-builder/
 │   │   ├── base.py             # ChunkingProfile dataclass
 │   │   ├── legal_chunker.py    # Generic legal document chunker
 │   │   └── profiles/           # Domain-specific patterns
+│   ├── finetune/               # Fine-tuning pair generation
+│   │   ├── loader.py           # KG data loader (GraphML + JSON stores)
+│   │   ├── strategies.py       # 7 generation strategies
+│   │   ├── filters.py          # Quality filtering pipeline
+│   │   ├── formatter.py        # Output formatters (OpenAI/Alpaca/ShareGPT)
+│   │   └── generator.py        # Orchestrator
 │   ├── kg/                     # Knowledge graph building
 │   │   ├── builder.py          # Core LightRAG builder (Ollama)
 │   │   ├── parallel.py         # Multiprocessing orchestration
@@ -150,8 +156,80 @@ lightrag-kg-builder/
 │   ├── llm/                    # LLM client (vLLM)
 │   └── utils/                  # Journal, config loader
 ├── scripts/                    # Shell utilities
+│   └── visualize_kg.py         # Interactive graph visualization
 └── docs/                       # Architecture documentation
 ```
+
+## Fine-Tuning Pair Generation
+
+Generate Q&A training pairs directly from the Knowledge Graph — no LLM required.
+
+### Usage
+
+```bash
+# Generate with config (all 7 strategies, OpenAI format)
+python -m src.cli generate --config configs/pcg2026.yaml --output /path/to/kg
+
+# Select output format
+python -m src.cli generate --output /path/to/kg --format alpaca
+
+# Select specific strategies
+python -m src.cli generate --output /path/to/kg --strategies entity_def,relational,chunk_qa
+```
+
+### Strategies
+
+| # | Strategy | Source Data | Description |
+|---|----------|-------------|-------------|
+| 1 | `entity_def` | Entity descriptions | Definition-style Q&A from entity metadata |
+| 2 | `relational` | Graph edges | Relationship questions between entities |
+| 3 | `hierarchical` | Chunk context brackets | Section-based Q&A from document hierarchy |
+| 4 | `comparative` | Same-type entity pairs | Compare/contrast entities of same type |
+| 5 | `multihop` | 2-3 edge graph paths | Multi-hop reasoning chains |
+| 6 | `chunk_qa` | Chunk text patterns | Heuristic extraction (definitions, articles, rules) |
+| 7 | `thematic` | Entity type clusters | Grouped overview summaries |
+
+### Output Formats
+
+- **openai** — `{"messages": [{"role": "system", ...}, {"role": "user", ...}, {"role": "assistant", ...}]}`
+- **alpaca** — `{"instruction": "Q", "input": "", "output": "A"}`
+- **sharegpt** — `{"conversations": [{"from": "human", ...}, {"from": "gpt", ...}]}`
+
+### Output Files
+
+```
+{output}/finetune/
+├── pairs_openai.jsonl        # Generated training pairs
+├── generation_report.json    # Stats per strategy, filter results
+└── rejected_pairs.jsonl      # Filtered-out pairs for review
+```
+
+### Configuration
+
+Add a `finetune` section to your config YAML:
+
+```yaml
+finetune:
+  system_prompt: "Tu es un expert-comptable..."
+  strategies: [entity_def, relational, hierarchical, comparative, multihop, chunk_qa, thematic]
+  format: openai
+  filters:
+    min_answer_length: 50
+    max_answer_length: 2000
+    deduplicate: true
+```
+
+## Graph Visualization
+
+Generate an interactive HTML visualization of the Knowledge Graph:
+
+```bash
+python scripts/visualize_kg.py --input /path/to/kg --output visualization.html
+```
+
+Features: dark theme, color-coded entity types, node size by degree centrality, hover tooltips, legend overlay.
+
+If using as a submodule in parles-au-pcg, the `/kg-viz` Claude Code skill automates this.
 
 ## Integration as Submodule
 

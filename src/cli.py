@@ -23,7 +23,7 @@ from typing import List, Dict, Any, Optional
 
 import click
 
-from .utils.config import load_config, merge_cli_overrides, ProjectConfig
+from .utils.config import load_config, merge_cli_overrides, ProjectConfig, FinetuneConfig
 from .utils.journal import ExecutionJournal
 from .extractors.pdf_extractor import PdfExtractor
 from .kg.parallel import ParallelKGBuilder, ParallelConfig
@@ -549,6 +549,73 @@ def health(vllm_url, ollama_url, embedding_model):
 
     exit_code = asyncio.run(_check())
     sys.exit(exit_code)
+
+
+@cli.command()
+@click.option('--config', 'config_path', default=None, help='Path to YAML config file')
+@click.option('--output', required=True, help='KG directory (where graph + KV stores live)')
+@click.option('--format', 'fmt', type=click.Choice(['openai', 'alpaca', 'sharegpt']),
+              default=None, help='Output format (overrides config)')
+@click.option('--strategies', default=None,
+              help='Comma-separated strategy names (overrides config)')
+@click.option('--system-prompt', default=None, help='System prompt for OpenAI format')
+def generate(config_path, output, fmt, strategies, system_prompt):
+    """Generate fine-tuning Q&A pairs from the Knowledge Graph."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    )
+
+    from .finetune.generator import FinetuneGenerator
+    from .finetune.filters import FilterConfig
+
+    # Load config if provided
+    if config_path:
+        config = load_config(config_path)
+        ftc = config.finetune
+    else:
+        ftc = FinetuneConfig()
+
+    # CLI overrides
+    format_name = fmt or ftc.format
+    strategy_names = strategies.split(",") if strategies else ftc.strategies
+    prompt = system_prompt or ftc.system_prompt
+
+    filter_config = FilterConfig(
+        min_answer_length=ftc.min_answer_length,
+        max_answer_length=ftc.max_answer_length,
+        min_question_length=ftc.min_question_length,
+        deduplicate=ftc.deduplicate,
+    )
+
+    output_dir = Path(output)
+
+    print("\n" + "=" * 60)
+    print("  Fine-Tuning Pair Generator")
+    print("=" * 60)
+    print(f"  KG Directory:  {output_dir}")
+    print(f"  Format:        {format_name}")
+    print(f"  Strategies:    {', '.join(strategy_names)}")
+    print("=" * 60 + "\n")
+
+    generator = FinetuneGenerator(
+        kg_dir=output_dir,
+        output_dir=output_dir,
+        strategy_names=strategy_names,
+        format_name=format_name,
+        system_prompt=prompt,
+        filter_config=filter_config,
+    )
+
+    report = generator.run()
+
+    print(f"\n  Summary:")
+    print(f"    Generated: {report.total_generated}")
+    print(f"    Accepted:  {report.total_accepted}")
+    print(f"    Rejected:  {report.total_rejected}")
+    for name, stats in report.per_strategy.items():
+        print(f"    [{name}] {stats['accepted']}/{stats['generated']} ({stats['acceptance_rate']}%)")
+    print("=" * 60)
 
 
 def main():
