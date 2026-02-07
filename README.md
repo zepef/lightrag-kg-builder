@@ -143,12 +143,13 @@ lightrag-kg-builder/
 │   │   ├── base.py             # ChunkingProfile dataclass
 │   │   ├── legal_chunker.py    # Generic legal document chunker
 │   │   └── profiles/           # Domain-specific patterns
-│   ├── finetune/               # Fine-tuning pair generation
+│   ├── finetune/               # Fine-tuning pair generation & training
 │   │   ├── loader.py           # KG data loader (GraphML + JSON stores)
 │   │   ├── strategies.py       # 7 generation strategies
 │   │   ├── filters.py          # Quality filtering pipeline
 │   │   ├── formatter.py        # Output formatters (OpenAI/Alpaca/ShareGPT)
-│   │   └── generator.py        # Orchestrator
+│   │   ├── generator.py        # Pair generation orchestrator
+│   │   └── trainer.py          # LoRA fine-tuning (Unsloth + TRL)
 │   ├── kg/                     # Knowledge graph building
 │   │   ├── builder.py          # Core LightRAG builder (Ollama)
 │   │   ├── parallel.py         # Multiprocessing orchestration
@@ -217,6 +218,73 @@ finetune:
     min_answer_length: 50
     max_answer_length: 2000
     deduplicate: true
+```
+
+## LoRA Fine-Tuning
+
+Train a LoRA adapter on the generated Q&A pairs using Unsloth + TRL.
+
+### Prerequisites
+
+```bash
+pip install -r requirements-training.txt
+```
+
+Requires a CUDA GPU (tested on RTX 4090 24GB).
+
+### Usage
+
+```bash
+# With config (recommended)
+python -m src.cli train \
+  --config configs/pcg2026.yaml \
+  --dataset data/kg/finetune/pairs_openai.jsonl \
+  --output models/mistral-pcg-lora
+
+# Override hyperparams
+python -m src.cli train \
+  --dataset data/kg/finetune/pairs_openai.jsonl \
+  --output models/mistral-pcg-lora \
+  --model mistralai/Mistral-7B-Instruct-v0.3 \
+  --epochs 3 \
+  --batch-size 2 \
+  --lr 2e-4 \
+  --save lora,gguf
+```
+
+### Output
+
+```
+models/mistral-pcg-lora/
+├── lora_adapters/           # ~50MB — LoRA delta weights
+│   ├── adapter_config.json
+│   ├── adapter_model.safetensors
+│   └── tokenizer files
+├── gguf/                    # ~4GB — quantized for Ollama
+│   └── unsloth.Q4_K_M.gguf
+└── training_report.json     # Loss curve, duration, config snapshot
+```
+
+### Configuration
+
+Add a `training` section to your config YAML:
+
+```yaml
+training:
+  model: mistralai/Mistral-7B-Instruct-v0.3
+  max_seq_length: 4096
+  load_in_4bit: true
+  lora_r: 16
+  lora_alpha: 16
+  lora_dropout: 0.05
+  epochs: 3
+  batch_size: 2
+  gradient_accumulation_steps: 4
+  learning_rate: 2e-4
+  warmup_steps: 5
+  save_formats:
+    - lora
+    - gguf
 ```
 
 ## Graph Visualization

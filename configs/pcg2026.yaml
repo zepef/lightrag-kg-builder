@@ -24,6 +24,22 @@ extraction:
     - ["Plan Comptable G\u00e9n\u00e9ral\\s*\\n", ""]
     - ["PCG\\s*\u2013\\s*\\d{4}\\s*\\n", ""]
 
+training:
+  model: mistralai/Mistral-7B-Instruct-v0.3
+  max_seq_length: 4096
+  load_in_4bit: true
+  lora_r: 16
+  lora_alpha: 16
+  lora_dropout: 0.05
+  epochs: 3
+  batch_size: 2
+  gradient_accumulation_steps: 4
+  learning_rate: 2e-4
+  warmup_steps: 5
+  save_formats:
+    - lora
+    - gguf
+
 finetune:
   system_prompt: "Tu es un expert-comptable specialise dans le Plan Comptable General (PCG) 2026. Tu reponds de maniere precise et pedagogique aux questions de comptabilite francaise."
   strategies:

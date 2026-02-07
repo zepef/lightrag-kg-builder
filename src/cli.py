@@ -23,7 +23,7 @@ from typing import List, Dict, Any, Optional
 
 import click
 
-from .utils.config import load_config, merge_cli_overrides, ProjectConfig, FinetuneConfig
+from .utils.config import load_config, merge_cli_overrides, ProjectConfig, FinetuneConfig, TrainingConfig
 from .utils.journal import ExecutionJournal
 from .extractors.pdf_extractor import PdfExtractor
 from .kg.parallel import ParallelKGBuilder, ParallelConfig
@@ -637,6 +637,81 @@ def generate(config_path, output, fmt, strategies, system_prompt, augment, llm, 
     for name, stats in report.per_strategy.items():
         print(f"    [{name}] {stats['accepted']}/{stats['generated']} ({stats['acceptance_rate']}%)")
     print("=" * 60)
+
+
+@cli.command()
+@click.option('--config', 'config_path', default=None, help='Path to YAML config file')
+@click.option('--dataset', required=True, type=click.Path(exists=True),
+              help='Path to OpenAI JSONL fine-tuning pairs')
+@click.option('--output', required=True, help='Output directory for trained model')
+@click.option('--model', default=None, help='Model name (overrides config)')
+@click.option('--epochs', type=int, default=None, help='Number of training epochs')
+@click.option('--batch-size', type=int, default=None, help='Per-device batch size')
+@click.option('--lr', type=float, default=None, help='Learning rate')
+@click.option('--save', 'save_formats', default=None,
+              help='Comma-separated save formats: lora,merged,gguf')
+def train(config_path, dataset, output, model, epochs, batch_size, lr, save_formats):
+    """Fine-tune a LoRA adapter on generated Q&A pairs."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    )
+
+    from .finetune.trainer import LoRATrainer
+
+    # Load config or use defaults
+    if config_path:
+        config = load_config(config_path)
+        trc = config.training
+    else:
+        trc = TrainingConfig()
+
+    # CLI overrides
+    if model:
+        trc.model = model
+    if epochs is not None:
+        trc.epochs = epochs
+    if batch_size is not None:
+        trc.batch_size = batch_size
+    if lr is not None:
+        trc.learning_rate = lr
+    if save_formats:
+        trc.save_formats = [f.strip() for f in save_formats.split(",")]
+
+    output_dir = Path(output)
+
+    # Check CUDA
+    import torch
+    if not torch.cuda.is_available():
+        print("\n  WARNING: CUDA not available — training will be very slow!")
+    else:
+        gpu = torch.cuda.get_device_name(0)
+        vram = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        print(f"\n  GPU: {gpu} ({vram:.1f} GB)")
+
+    print("\n" + "=" * 60)
+    print("  LoRA Fine-Tuning")
+    print("=" * 60)
+    print(f"  Model:    {trc.model}")
+    print(f"  Dataset:  {dataset}")
+    print(f"  Output:   {output_dir}")
+    print(f"  Epochs:   {trc.epochs}")
+    print(f"  Batch:    {trc.batch_size} (eff. {trc.batch_size * trc.gradient_accumulation_steps})")
+    print(f"  LR:       {trc.learning_rate}")
+    print(f"  LoRA:     r={trc.lora_r}, alpha={trc.lora_alpha}")
+    print(f"  Save:     {', '.join(trc.save_formats)}")
+    print("=" * 60)
+
+    trainer = LoRATrainer(config=trc, output_dir=output_dir)
+    report = trainer.run(dataset_path=Path(dataset))
+
+    print("\n" + "=" * 60)
+    print("  TRAINING COMPLETE")
+    print("=" * 60)
+    print(f"  Duration:   {report['duration_min']} min")
+    print(f"  Final loss: {report['final_loss']}")
+    print(f"  Output:     {output_dir}")
+    print("=" * 60 + "\n")
 
 
 def main():

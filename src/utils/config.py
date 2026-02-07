@@ -30,6 +30,25 @@ class FinetuneConfig:
 
 
 @dataclass
+class TrainingConfig:
+    """Configuration for LoRA fine-tuning."""
+    model: str = "mistralai/Mistral-7B-Instruct-v0.3"
+    max_seq_length: int = 4096
+    load_in_4bit: bool = True
+    lora_r: int = 16
+    lora_alpha: int = 16
+    lora_dropout: float = 0.05
+    epochs: int = 3
+    batch_size: int = 2
+    gradient_accumulation_steps: int = 4
+    learning_rate: float = 2e-4
+    warmup_steps: int = 5
+    logging_steps: int = 1
+    save_steps: int = 50
+    save_formats: List[str] = field(default_factory=lambda: ["lora", "gguf"])
+
+
+@dataclass
 class ProjectConfig:
     """Parsed and validated project configuration."""
     # Project
@@ -57,6 +76,9 @@ class ProjectConfig:
 
     # Fine-tuning
     finetune: FinetuneConfig = field(default_factory=FinetuneConfig)
+
+    # Training (LoRA)
+    training: TrainingConfig = field(default_factory=TrainingConfig)
 
 
 def load_config(config_path: str) -> ProjectConfig:
@@ -143,6 +165,39 @@ def load_config(config_path: str) -> ProjectConfig:
             ftc.max_answer_length = int(filters['max_answer_length'])
         if filters.get('deduplicate') is not None:
             ftc.deduplicate = bool(filters['deduplicate'])
+
+    # Training section
+    tr = raw.get('training', {})
+    if tr:
+        trc = config.training
+        if tr.get('model'):
+            trc.model = tr['model']
+        if tr.get('max_seq_length') is not None:
+            trc.max_seq_length = int(tr['max_seq_length'])
+        if tr.get('load_in_4bit') is not None:
+            trc.load_in_4bit = bool(tr['load_in_4bit'])
+        if tr.get('lora_r') is not None:
+            trc.lora_r = int(tr['lora_r'])
+        if tr.get('lora_alpha') is not None:
+            trc.lora_alpha = int(tr['lora_alpha'])
+        if tr.get('lora_dropout') is not None:
+            trc.lora_dropout = float(tr['lora_dropout'])
+        if tr.get('epochs') is not None:
+            trc.epochs = int(tr['epochs'])
+        if tr.get('batch_size') is not None:
+            trc.batch_size = int(tr['batch_size'])
+        if tr.get('gradient_accumulation_steps') is not None:
+            trc.gradient_accumulation_steps = int(tr['gradient_accumulation_steps'])
+        if tr.get('learning_rate') is not None:
+            trc.learning_rate = float(tr['learning_rate'])
+        if tr.get('warmup_steps') is not None:
+            trc.warmup_steps = int(tr['warmup_steps'])
+        if tr.get('logging_steps') is not None:
+            trc.logging_steps = int(tr['logging_steps'])
+        if tr.get('save_steps') is not None:
+            trc.save_steps = int(tr['save_steps'])
+        if tr.get('save_formats'):
+            trc.save_formats = tr['save_formats']
 
     return config
 
