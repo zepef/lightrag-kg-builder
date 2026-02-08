@@ -79,9 +79,14 @@ class QualityFilter:
         if answer_len < self.config.min_answer_length:
             return f"answer_too_short ({answer_len} < {self.config.min_answer_length})"
 
-        # Truncate overly long answers (not reject, but trim)
+        # Truncate overly long answers (not reject, but trim at last sentence boundary)
         if answer_len > self.config.max_answer_length:
-            pair.answer = pair.answer[:self.config.max_answer_length].rsplit(".", 1)[0] + "."
+            truncated = pair.answer[:self.config.max_answer_length]
+            last_period = truncated.rfind(".")
+            if last_period > self.config.min_answer_length:
+                pair.answer = truncated[:last_period + 1]
+            else:
+                pair.answer = truncated
 
         # Empty content
         if not pair.answer.strip() or not pair.question.strip():

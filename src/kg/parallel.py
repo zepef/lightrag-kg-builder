@@ -310,9 +310,15 @@ class ParallelKGBuilder:
         Returns:
             List of PipelineResult from each worker
         """
-        for chunk in chunks:
+        valid_chunks = []
+        for i, chunk in enumerate(chunks):
+            if 'text' not in chunk or not chunk['text']:
+                logger.warning(f"Skipping chunk {i}: missing or empty 'text' field")
+                continue
             if 'hash_id' not in chunk:
                 chunk['hash_id'] = hashlib.md5(chunk['text'][:500].encode()).hexdigest()[:12]
+            valid_chunks.append(chunk)
+        chunks = valid_chunks
 
         ranges = self.split_chunks(chunks)
 

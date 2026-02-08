@@ -295,14 +295,16 @@ class LLMAugmenter:
                     errors += 1
                     if errors <= 5:
                         logger.warning(f"LLM augmentation error: {e}")
-                    elif errors == 6:
-                        logger.warning("Suppressing further LLM augmentation errors...")
 
         client.close()
 
+        if errors > 5:
+            logger.warning(f"LLM augmentation: {errors - 5} additional errors suppressed")
+
+        total_attempts = len(pairs) * self.n
         logger.info(
             f"LLM augmentation: {len(pairs)} originals + {total_variants} variants "
-            f"= {len(augmented)} total ({errors} errors)"
+            f"= {len(augmented)} total ({errors}/{total_attempts} attempts failed)"
         )
         return augmented
 

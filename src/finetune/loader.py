@@ -186,13 +186,26 @@ class KGLoader:
                 continue
 
             content = item.get("content", "")
+            if not content:
+                continue
+
             # content format: "keywords\tSrc\nTgt\nDescription"
             parts = content.split("\t", 1)
-            keywords_str = parts[0] if len(parts) > 1 else ""
-            desc_part = parts[1] if len(parts) > 1 else content
+            if len(parts) > 1:
+                keywords_str = parts[0]
+                desc_part = parts[1]
+            else:
+                keywords_str = ""
+                desc_part = content
+
             # Description is after the two entity name lines
             desc_lines = desc_part.split("\n")
-            description = desc_lines[2] if len(desc_lines) > 2 else desc_part
+            if len(desc_lines) > 2:
+                description = desc_lines[2]
+            elif len(desc_lines) > 0:
+                description = desc_lines[-1]
+            else:
+                description = desc_part
 
             keywords = [k.strip() for k in keywords_str.split(",") if k.strip()]
 
