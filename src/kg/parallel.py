@@ -245,12 +245,16 @@ def _run_pipeline_process(config_dict: Dict, chunks: List[Dict], result_file: st
         }
         Path(result_file).write_text(json.dumps(result_data))
 
+    log_dir = Path(config_dict['working_dir'])
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / f"pipeline_p{config_dict['pipeline_id']}.log"
+
     logging.basicConfig(
         level=logging.INFO,
         format=f'%(asctime)s [P{config_dict["pipeline_id"]}] %(levelname)s: %(message)s',
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler(f'/tmp/lightrag_p{config_dict["pipeline_id"]}.log', mode='a')
+            logging.FileHandler(str(log_file), mode='a')
         ]
     )
     asyncio.run(_run())
@@ -307,6 +311,8 @@ class ParallelKGBuilder:
         result_files = []
         start_time = time.perf_counter()
 
+        self.config.base_output_dir.mkdir(parents=True, exist_ok=True)
+
         for i, (start, end) in enumerate(ranges):
             config_dict = {
                 'pipeline_id': i + 1,
@@ -318,7 +324,7 @@ class ParallelKGBuilder:
                 'embedding_dim': self.config.embedding_dim,
                 'llm_model': self.config.llm_model,
             }
-            result_file = f"/tmp/pipeline_result_p{i+1}.json"
+            result_file = str(self.config.base_output_dir / f"_result_p{i+1}.json")
             result_files.append(result_file)
 
             p = multiprocessing.Process(
@@ -339,8 +345,9 @@ class ParallelKGBuilder:
 
         pipeline_results = []
         for i, result_file in enumerate(result_files):
+            result_path = Path(result_file)
             try:
-                data = json.loads(Path(result_file).read_text())
+                data = json.loads(result_path.read_text())
                 pipeline_results.append(PipelineResult(
                     pipeline_id=data['pipeline_id'],
                     output_dir=Path(data['output_dir']),
@@ -361,6 +368,9 @@ class ParallelKGBuilder:
                     success=False,
                     error=f"Process failed: {e}",
                 ))
+            finally:
+                if result_path.exists():
+                    result_path.unlink()
 
         total_processed = sum(r.chunks_processed for r in pipeline_results)
         total_chunks = sum(r.chunks_total for r in pipeline_results)

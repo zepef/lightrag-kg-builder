@@ -80,6 +80,7 @@ class VLLMClient:
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
+        history_messages: Optional[List[Dict[str, str]]] = None,
         **kwargs
     ) -> str:
         """
@@ -88,6 +89,7 @@ class VLLMClient:
         Args:
             prompt: The user prompt to complete
             system_prompt: Optional system prompt for context
+            history_messages: Optional conversation history (list of role/content dicts)
             **kwargs: Override default config (max_tokens, temperature, etc.)
 
         Returns:
@@ -96,6 +98,8 @@ class VLLMClient:
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
+        if history_messages:
+            messages.extend(history_messages)
         messages.append({"role": "user", "content": prompt})
 
         payload = {
@@ -183,7 +187,9 @@ def create_lightrag_llm_func(vllm_client: VLLMClient):
         history_messages: Optional[List[Dict[str, str]]] = None,
         **kwargs
     ) -> str:
-        return await vllm_client.complete(prompt, system_prompt, **kwargs)
+        return await vllm_client.complete(
+            prompt, system_prompt, history_messages=history_messages, **kwargs
+        )
 
     return llm_func
 
@@ -225,6 +231,8 @@ def create_vllm_llm_func(
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
+        if history_messages:
+            messages.extend(history_messages)
         messages.append({"role": "user", "content": prompt})
 
         payload = {
