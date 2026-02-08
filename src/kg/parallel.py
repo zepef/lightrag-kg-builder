@@ -87,6 +87,8 @@ class PipelineWorker:
         self.rag = None
         self.chunks_processed = 0
         self.progress_file = config.working_dir / "progress.json"
+        self._llm_func = None
+        self._embedding_func = None
 
     async def initialize(self):
         """Initialize LightRAG with vLLM as LLM backend."""
@@ -97,14 +99,14 @@ class PipelineWorker:
 
         self.config.working_dir.mkdir(parents=True, exist_ok=True)
 
-        vllm_complete = create_vllm_llm_func(
+        self._llm_func = create_vllm_llm_func(
             vllm_url=self.config.vllm_url,
             model=self.config.llm_model,
             max_tokens=self.config.max_tokens,
             temperature=self.config.temperature,
         )
 
-        embedding_func = create_ollama_embedding_func(
+        self._embedding_func = create_ollama_embedding_func(
             ollama_url=self.config.ollama_url,
             embedding_model=self.config.embedding_model,
             embedding_dim=self.config.embedding_dim,
@@ -112,12 +114,12 @@ class PipelineWorker:
 
         self.rag = LightRAG(
             working_dir=str(self.config.working_dir),
-            llm_model_func=vllm_complete,
+            llm_model_func=self._llm_func,
             llm_model_name=self.config.llm_model,
             embedding_func=EmbeddingFunc(
                 embedding_dim=self.config.embedding_dim,
                 max_token_size=400,
-                func=embedding_func,
+                func=self._embedding_func,
             ),
             embedding_func_max_async=16,
             llm_model_max_async=32,
@@ -176,6 +178,7 @@ class PipelineWorker:
                     )
 
             duration_ms = int((time.perf_counter() - start_time) * 1000)
+            await self._close_clients()
 
             return PipelineResult(
                 pipeline_id=self.config.pipeline_id,
@@ -193,6 +196,7 @@ class PipelineWorker:
             except Exception as finalize_err:
                 logger.error(f"Pipeline {self.config.pipeline_id} failed to finalize storages: {finalize_err}", exc_info=True)
 
+            await self._close_clients()
             duration_ms = int((time.perf_counter() - start_time) * 1000)
             return PipelineResult(
                 pipeline_id=self.config.pipeline_id,
@@ -211,6 +215,15 @@ class PipelineWorker:
 
     def _save_progress(self, progress: Dict[str, Any]):
         self.progress_file.write_text(json.dumps(progress, indent=2))
+
+    async def _close_clients(self):
+        """Close httpx clients used by LLM and embedding functions."""
+        for func in (self._llm_func, self._embedding_func):
+            if func is not None and hasattr(func, 'close'):
+                try:
+                    await func.close()
+                except Exception as e:
+                    logger.warning(f"Pipeline {self.config.pipeline_id} client cleanup error: {e}")
 
 
 def _run_pipeline_process(config_dict: Dict, chunks: List[Dict], result_file: str):

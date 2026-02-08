@@ -259,6 +259,13 @@ def create_vllm_llm_func(
 
         raise RuntimeError(f"vLLM request failed after {max_retries} attempts")
 
+    async def close():
+        nonlocal _client
+        if _client is not None:
+            await _client.aclose()
+            _client = None
+
+    llm_func.close = close
     return llm_func
 
 

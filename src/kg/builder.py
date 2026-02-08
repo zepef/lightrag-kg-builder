@@ -35,6 +35,7 @@ class KnowledgeGraphBuilder:
         self.llm_model = llm_model
         self.embedding_model = embedding_model
         self.embedding_dim = embedding_dim
+        self._embedding_func = None
 
         self.rag = self._init_lightrag()
 
@@ -47,7 +48,7 @@ class KnowledgeGraphBuilder:
 
         logger.info(f"Configuring LightRAG - LLM: {self.llm_model}, Embedding: {self.embedding_model}")
 
-        embedding_func = create_ollama_embedding_func(
+        self._embedding_func = create_ollama_embedding_func(
             ollama_url=self.ollama_url,
             embedding_model=self.embedding_model,
             embedding_dim=self.embedding_dim,
@@ -68,7 +69,7 @@ class KnowledgeGraphBuilder:
             embedding_func=EmbeddingFunc(
                 embedding_dim=self.embedding_dim,
                 max_token_size=400,
-                func=embedding_func,
+                func=self._embedding_func,
             ),
             embedding_func_max_async=1,
             llm_model_max_async=1,
@@ -80,6 +81,11 @@ class KnowledgeGraphBuilder:
 
         logger.info("LightRAG initialized")
         return rag
+
+    async def close(self):
+        """Close the embedding HTTP client."""
+        if self._embedding_func is not None and hasattr(self._embedding_func, 'close'):
+            await self._embedding_func.close()
 
     async def insert_document(self, text: str, description: str = "") -> Dict[str, Any]:
         """Insert a document into the knowledge graph."""

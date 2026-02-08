@@ -1,10 +1,11 @@
-"""Tests for vLLM client and factory functions."""
+"""Tests for vLLM client and embedding factory functions."""
 
 import asyncio
 
 import pytest
 
 from src.llm.vllm_client import VLLMConfig, VLLMClient, create_vllm_llm_func
+from src.llm.embedding import create_ollama_embedding_func
 
 
 # ============================================================================
@@ -84,3 +85,36 @@ class TestCreateVllmLlmFunc:
         assert "system_prompt" in params
         assert "history_messages" in params
         assert "kwargs" in params
+
+    def test_close_method_exists(self):
+        """Factory function should expose a .close() coroutine."""
+        func = create_vllm_llm_func()
+        assert hasattr(func, 'close')
+        assert asyncio.iscoroutinefunction(func.close)
+
+    def test_close_without_usage(self):
+        """Closing before any call should not raise."""
+        func = create_vllm_llm_func()
+        asyncio.run(func.close())
+
+
+# ============================================================================
+# create_ollama_embedding_func - close method
+# ============================================================================
+
+class TestOllamaEmbeddingFunc:
+
+    def test_factory_returns_callable(self):
+        func = create_ollama_embedding_func()
+        assert callable(func)
+
+    def test_close_method_exists(self):
+        """Embedding factory should expose a .close() coroutine."""
+        func = create_ollama_embedding_func()
+        assert hasattr(func, 'close')
+        assert asyncio.iscoroutinefunction(func.close)
+
+    def test_close_without_usage(self):
+        """Closing before any call should not raise."""
+        func = create_ollama_embedding_func()
+        asyncio.run(func.close())

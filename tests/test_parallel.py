@@ -1,8 +1,9 @@
 """Tests for the parallel KG pipeline orchestrator."""
 
+import asyncio
 import json
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
@@ -126,6 +127,38 @@ class TestPipelineWorker:
         )
         worker = PipelineWorker(cfg)
         assert worker.progress_file == tmp_path / "progress.json"
+
+    def test_close_clients_without_init(self, tmp_path):
+        """Closing clients before initialization should not raise."""
+        cfg = PipelineConfig(
+            pipeline_id=1,
+            working_dir=tmp_path,
+            chunk_range=(0, 5),
+            vllm_url="http://localhost:8000/v1",
+            ollama_url="http://localhost:11434",
+        )
+        worker = PipelineWorker(cfg)
+        asyncio.run(worker._close_clients())
+
+    def test_close_clients_calls_close(self, tmp_path):
+        """Verify _close_clients calls .close() on both functions."""
+        cfg = PipelineConfig(
+            pipeline_id=1,
+            working_dir=tmp_path,
+            chunk_range=(0, 5),
+            vllm_url="http://localhost:8000/v1",
+            ollama_url="http://localhost:11434",
+        )
+        worker = PipelineWorker(cfg)
+        worker._llm_func = MagicMock()
+        worker._llm_func.close = AsyncMock()
+        worker._embedding_func = MagicMock()
+        worker._embedding_func.close = AsyncMock()
+
+        asyncio.run(worker._close_clients())
+
+        worker._llm_func.close.assert_awaited_once()
+        worker._embedding_func.close.assert_awaited_once()
 
 
 # ============================================================================

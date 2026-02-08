@@ -84,4 +84,11 @@ def create_ollama_embedding_func(
 
         return np.array(embeddings)
 
+    async def close():
+        nonlocal _client
+        if _client is not None:
+            await _client.aclose()
+            _client = None
+
+    embedding_func.close = close
     return embedding_func
