@@ -7,6 +7,7 @@ enabling faster inference through continuous batching and optimized GPU utilizat
 
 import asyncio
 import aiohttp
+import httpx
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
 import logging
@@ -183,6 +184,72 @@ def create_lightrag_llm_func(vllm_client: VLLMClient):
         **kwargs
     ) -> str:
         return await vllm_client.complete(prompt, system_prompt, **kwargs)
+
+    return llm_func
+
+
+def create_vllm_llm_func(
+    vllm_url: str = "http://localhost:8000/v1",
+    model: str = "mistralai/Mistral-7B-Instruct-v0.3",
+    max_tokens: int = 2048,
+    temperature: float = 0.1,
+    timeout: float = 300.0,
+    max_retries: int = 3,
+):
+    """
+    Create a LightRAG-compatible async LLM function using vLLM.
+
+    Returns an async function compatible with LightRAG's llm_model_func parameter.
+    Manages a single httpx.AsyncClient internally for connection reuse.
+
+    Args:
+        vllm_url: vLLM server URL (OpenAI-compatible)
+        model: Model name
+        max_tokens: Default max tokens for generation
+        temperature: Default temperature
+        timeout: HTTP request timeout
+        max_retries: Number of retry attempts
+    """
+    _client: Optional[httpx.AsyncClient] = None
+
+    async def llm_func(
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        history_messages: Optional[List[Dict[str, str]]] = None,
+        **kwargs,
+    ) -> str:
+        nonlocal _client
+        if _client is None:
+            _client = httpx.AsyncClient(timeout=timeout)
+
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        payload = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": kwargs.get("max_tokens", max_tokens),
+            "temperature": kwargs.get("temperature", temperature),
+        }
+
+        for attempt in range(max_retries):
+            try:
+                resp = await _client.post(
+                    f"{vllm_url}/chat/completions",
+                    json=payload,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data["choices"][0]["message"]["content"]
+                logger.warning(f"vLLM request failed: {resp.status_code}")
+            except Exception as e:
+                logger.warning(f"vLLM error (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(1.0 * (attempt + 1))
+
+        raise RuntimeError(f"vLLM request failed after {max_retries} attempts")
 
     return llm_func
 

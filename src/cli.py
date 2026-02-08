@@ -265,12 +265,11 @@ def cli():
 @click.option('--vllm-url', default=None, help='vLLM server URL (overrides config)')
 @click.option('--ollama-url', default=None, help='Ollama server URL (overrides config)')
 @click.option('--test-chunks', type=int, default=None, help='Only process N chunks (for testing)')
-@click.option('--resume/--no-resume', default=False, help='Resume from last checkpoint')
 @click.option('--clean', is_flag=True, help='Clear all data and start fresh')
 @click.option('--skip-merge', is_flag=True, help='Skip graph merging step')
 @click.option('--skip-health-check', is_flag=True, help='Skip vLLM/Ollama health checks')
 def build(config_path, sources, output, mode, pipelines, vllm_url, ollama_url,
-          test_chunks, resume, clean, skip_merge, skip_health_check):
+          test_chunks, clean, skip_merge, skip_health_check):
     """Build a Knowledge Graph from source documents."""
     # Setup logging
     logging.basicConfig(

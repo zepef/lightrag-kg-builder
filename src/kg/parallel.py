@@ -29,8 +29,6 @@ import multiprocessing
 from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
-import numpy as np
-
 logger = logging.getLogger(__name__)
 
 
@@ -94,81 +92,23 @@ class PipelineWorker:
         """Initialize LightRAG with vLLM as LLM backend."""
         from lightrag import LightRAG
         from lightrag.utils import EmbeddingFunc
-        import httpx
+        from ..llm.vllm_client import create_vllm_llm_func
+        from ..llm.embedding import create_ollama_embedding_func
 
         self.config.working_dir.mkdir(parents=True, exist_ok=True)
 
-        async def vllm_complete(
-            prompt: str,
-            system_prompt: Optional[str] = None,
-            history_messages: Optional[List[Dict[str, str]]] = None,
-            **kwargs
-        ) -> str:
-            """LLM completion using vLLM's OpenAI-compatible API."""
-            messages = []
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
-            messages.append({"role": "user", "content": prompt})
+        vllm_complete = create_vllm_llm_func(
+            vllm_url=self.config.vllm_url,
+            model=self.config.llm_model,
+            max_tokens=self.config.max_tokens,
+            temperature=self.config.temperature,
+        )
 
-            payload = {
-                "model": self.config.llm_model,
-                "messages": messages,
-                "max_tokens": kwargs.get("max_tokens", self.config.max_tokens),
-                "temperature": kwargs.get("temperature", self.config.temperature),
-            }
-
-            async with httpx.AsyncClient(timeout=300.0) as client:
-                for attempt in range(3):
-                    try:
-                        resp = await client.post(
-                            f"{self.config.vllm_url}/chat/completions",
-                            json=payload
-                        )
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            return data["choices"][0]["message"]["content"]
-                        logger.warning(f"vLLM request failed: {resp.status_code}")
-                    except Exception as e:
-                        logger.warning(f"vLLM error (attempt {attempt+1}): {e}")
-                        if attempt < 2:
-                            await asyncio.sleep(1.0 * (attempt + 1))
-
-            raise RuntimeError("vLLM request failed after 3 attempts")
-
-        async def embedding_func(texts: List[str]) -> np.ndarray:
-            """Embedding function using Ollama."""
-            import httpx
-            embeddings = []
-
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                for text in texts:
-                    if len(text) > 400:
-                        text = text[:400]
-                    text = text.replace('\x00', ' ').replace('\ufffd', ' ')
-                    if not text.strip():
-                        text = "empty"
-
-                    for attempt in range(3):
-                        try:
-                            resp = await client.post(
-                                f"{self.config.ollama_url}/api/embeddings",
-                                json={
-                                    "model": self.config.embedding_model,
-                                    "prompt": text,
-                                    "options": {"num_ctx": 2048}
-                                }
-                            )
-                            resp.raise_for_status()
-                            embeddings.append(resp.json()["embedding"])
-                            break
-                        except Exception as e:
-                            if attempt < 2:
-                                await asyncio.sleep(0.5 * (attempt + 1))
-                            else:
-                                embeddings.append([0.0] * self.config.embedding_dim)
-                                logger.error(f"Embedding failed for text: {e}")
-
-            return np.array(embeddings)
+        embedding_func = create_ollama_embedding_func(
+            ollama_url=self.config.ollama_url,
+            embedding_model=self.config.embedding_model,
+            embedding_dim=self.config.embedding_dim,
+        )
 
         self.rag = LightRAG(
             working_dir=str(self.config.working_dir),
