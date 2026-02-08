@@ -271,16 +271,6 @@ def cli():
 def build(config_path, sources, output, mode, pipelines, vllm_url, ollama_url,
           test_chunks, clean, skip_merge, skip_health_check):
     """Build a Knowledge Graph from source documents."""
-    # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler('/tmp/lightrag_kg_build.log', mode='a')
-        ]
-    )
-
     # Load config
     config = load_config(config_path)
     config = merge_cli_overrides(
@@ -294,6 +284,17 @@ def build(config_path, sources, output, mode, pipelines, vllm_url, ollama_url,
     # Resolve paths
     sources_dir = Path(config.sources_dir) if config.sources_dir else None
     output_dir = Path(config.output_dir) if config.output_dir else Path("./output/kg")
+
+    # Setup logging (after output_dir is resolved so log file goes there)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler(str(output_dir / 'build.log'), mode='a')
+        ]
+    )
 
     if not sources_dir:
         click.echo("Error: --sources is required (or set paths.sources in config)")
