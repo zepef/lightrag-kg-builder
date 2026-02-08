@@ -91,12 +91,12 @@ class TestTemplateAugmenterBasic:
         pairs = [_make_pair()]
         r1 = TemplateAugmenter(n=3, seed=1).augment(pairs)
         r2 = TemplateAugmenter(n=3, seed=999).augment(pairs)
-        # At least one variant should differ (probabilistic but very likely with 3 variants)
+        # Variants from different seeds should not be completely identical
+        # Compare full (question, answer) tuples since answer connector swaps are seed-dependent
         if len(r1) > 1 and len(r2) > 1:
-            questions1 = {p.question for p in r1[1:]}
-            questions2 = {p.question for p in r2[1:]}
-            # Not guaranteed to differ, but extremely likely
-            assert len(questions1 | questions2) >= 1
+            variants1 = {(p.question, p.answer) for p in r1[1:]}
+            variants2 = {(p.question, p.answer) for p in r2[1:]}
+            assert variants1 != variants2
 
 
 # ============================================================================
