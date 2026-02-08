@@ -190,8 +190,8 @@ class PipelineWorker:
             logger.error(f"Pipeline {self.config.pipeline_id} failed: {e}")
             try:
                 await self.rag.finalize_storages()
-            except Exception:
-                pass
+            except Exception as finalize_err:
+                logger.error(f"Pipeline {self.config.pipeline_id} failed to finalize storages: {finalize_err}", exc_info=True)
 
             duration_ms = int((time.perf_counter() - start_time) * 1000)
             return PipelineResult(
