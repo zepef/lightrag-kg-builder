@@ -246,57 +246,58 @@ class LLMAugmenter:
 
         client = httpx.Client(timeout=60.0)
 
-        for i, pair in enumerate(pairs):
-            if i % 50 == 0:
-                logger.info(f"LLM augmenting: {i}/{len(pairs)} ({total_variants} variants so far)")
+        try:
+            for i, pair in enumerate(pairs):
+                if i % 50 == 0:
+                    logger.info(f"LLM augmenting: {i}/{len(pairs)} ({total_variants} variants so far)")
 
-            for attempt in range(self.n):
-                try:
-                    prompt = self.REPHRASE_PROMPT.format(
-                        question=pair.question,
-                        answer=pair.answer[:1000],  # cap answer length for prompt
-                    )
+                for attempt in range(self.n):
+                    try:
+                        prompt = self.REPHRASE_PROMPT.format(
+                            question=pair.question,
+                            answer=pair.answer[:1000],  # cap answer length for prompt
+                        )
 
-                    resp = client.post(
-                        f"{self.api_url}/chat/completions",
-                        json={
-                            "model": self.model,
-                            "messages": [{"role": "user", "content": prompt}],
-                            "temperature": self.temperature + (attempt * 0.1),  # vary temp per attempt
-                            "max_tokens": 1500,
-                        },
-                    )
-                    resp.raise_for_status()
+                        resp = client.post(
+                            f"{self.api_url}/chat/completions",
+                            json={
+                                "model": self.model,
+                                "messages": [{"role": "user", "content": prompt}],
+                                "temperature": self.temperature + (attempt * 0.1),  # vary temp per attempt
+                                "max_tokens": 1500,
+                            },
+                        )
+                        resp.raise_for_status()
 
-                    content = resp.json()["choices"][0]["message"]["content"].strip()
+                        content = resp.json()["choices"][0]["message"]["content"].strip()
 
-                    # Parse JSON response
-                    # Handle cases where model wraps in ```json
-                    if content.startswith("```"):
-                        content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+                        # Parse JSON response
+                        # Handle cases where model wraps in ```json
+                        if content.startswith("```"):
+                            content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
 
-                    parsed = json.loads(content)
-                    new_q = parsed.get("question", "").strip()
-                    new_a = parsed.get("answer", "").strip()
+                        parsed = json.loads(content)
+                        new_q = parsed.get("question", "").strip()
+                        new_a = parsed.get("answer", "").strip()
 
-                    if not new_q or not new_a or len(new_a) < 30:
-                        continue
+                        if not new_q or not new_a or len(new_a) < 30:
+                            continue
 
-                    augmented.append(FTPair(
-                        question=new_q,
-                        answer=new_a,
-                        strategy_name=pair.strategy_name,
-                        source_entities=pair.source_entities.copy(),
-                        metadata={**pair.metadata, "augmented": True, "augment_method": "llm"},
-                    ))
-                    total_variants += 1
+                        augmented.append(FTPair(
+                            question=new_q,
+                            answer=new_a,
+                            strategy_name=pair.strategy_name,
+                            source_entities=pair.source_entities.copy(),
+                            metadata={**pair.metadata, "augmented": True, "augment_method": "llm"},
+                        ))
+                        total_variants += 1
 
-                except Exception as e:
-                    errors += 1
-                    if errors <= 5:
-                        logger.warning(f"LLM augmentation error: {e}")
-
-        client.close()
+                    except Exception as e:
+                        errors += 1
+                        if errors <= 5:
+                            logger.warning(f"LLM augmentation error: {e}")
+        finally:
+            client.close()
 
         if errors > 5:
             logger.warning(f"LLM augmentation: {errors - 5} additional errors suppressed")
