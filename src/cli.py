@@ -140,23 +140,51 @@ def load_or_extract_text(
     output_dir: Path,
     cleanup_patterns: Optional[list] = None,
     force: bool = False,
+    extra_text_dirs: Optional[List[Path]] = None,
 ) -> str:
-    """Load cached extracted text or extract from PDFs."""
+    """Load cached extracted text or extract from PDFs and text files.
+
+    Args:
+        sources_dir: Directory containing source PDFs
+        output_dir: Output directory for caching
+        cleanup_patterns: Regex patterns for text cleanup
+        force: Force re-extraction even if cache exists
+        extra_text_dirs: Additional directories containing .txt files to include
+    """
     cached_path = output_dir / "extracted_text.txt"
 
     if cached_path.exists() and not force:
         logger.info(f"Using cached extraction: {cached_path}")
         return cached_path.read_text(encoding='utf-8')
 
+    # Extract from PDFs
     logger.info(f"Extracting text from PDFs in {sources_dir}...")
     extractor = PdfExtractor(cleanup_patterns=cleanup_patterns or None)
     result = extractor.extract_all(sources_dir)
+    combined_text = result.text
+    logger.info(f"Extracted {result.chars:,} chars from {result.pages} pages (PDFs)")
+
+    # Also load .txt files from sources_dir
+    txt_files = sorted(sources_dir.glob("*.txt"))
+
+    # Include extra text directories
+    if extra_text_dirs:
+        for text_dir in extra_text_dirs:
+            if text_dir.exists():
+                txt_files.extend(sorted(text_dir.glob("*.txt")))
+
+    for txt_file in txt_files:
+        logger.info(f"Loading text file: {txt_file.name}")
+        txt_content = txt_file.read_text(encoding='utf-8')
+        combined_text += f"\n\n{'=' * 60}\n# SOURCE: {txt_file.name}\n{'=' * 60}\n\n"
+        combined_text += txt_content
+        logger.info(f"  Added {len(txt_content):,} chars from {txt_file.name}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    cached_path.write_text(result.text, encoding='utf-8')
-    logger.info(f"Extracted {result.chars:,} chars from {result.pages} pages")
+    cached_path.write_text(combined_text, encoding='utf-8')
+    logger.info(f"Total extracted text: {len(combined_text):,} chars")
 
-    return result.text
+    return combined_text
 
 
 def load_or_create_chunks(
@@ -268,8 +296,9 @@ def cli():
 @click.option('--clean', is_flag=True, help='Clear all data and start fresh')
 @click.option('--skip-merge', is_flag=True, help='Skip graph merging step')
 @click.option('--skip-health-check', is_flag=True, help='Skip vLLM/Ollama health checks')
+@click.option('--text-sources', multiple=True, help='Additional directories with .txt files to include')
 def build(config_path, sources, output, mode, pipelines, vllm_url, ollama_url,
-          test_chunks, clean, skip_merge, skip_health_check):
+          test_chunks, clean, skip_merge, skip_health_check, text_sources):
     """Build a Knowledge Graph from source documents."""
     # Load config
     config = load_config(config_path)
@@ -317,6 +346,9 @@ def build(config_path, sources, output, mode, pipelines, vllm_url, ollama_url,
         output_dir.mkdir(parents=True, exist_ok=True)
         print("  Clean complete")
 
+    # Parse extra text source directories
+    extra_text_dirs = [Path(d) for d in text_sources] if text_sources else None
+
     # Run async build
     exit_code = asyncio.run(_async_build(
         config=config,
@@ -328,6 +360,7 @@ def build(config_path, sources, output, mode, pipelines, vllm_url, ollama_url,
         skip_merge=skip_merge,
         skip_health_check=skip_health_check,
         clean=clean,
+        extra_text_dirs=extra_text_dirs,
     ))
     sys.exit(exit_code)
 
@@ -342,6 +375,7 @@ async def _async_build(
     skip_merge: bool,
     skip_health_check: bool,
     clean: bool,
+    extra_text_dirs: Optional[List[Path]] = None,
 ) -> int:
     """Async build orchestration."""
     # Health checks
@@ -370,6 +404,7 @@ async def _async_build(
         sources_dir, output_dir,
         cleanup_patterns=config.cleanup_patterns or None,
         force=clean,
+        extra_text_dirs=extra_text_dirs,
     )
     print(f"    {len(text):,} characters\n")
 
