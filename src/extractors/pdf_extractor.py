@@ -143,10 +143,9 @@ class PdfExtractor:
                 text = self.extract_single(pdf_path)
                 all_texts.append(f"\n\n{'='*60}\n# SOURCE: {pdf_path.name}\n{'='*60}\n\n{text}")
                 source_files.append(pdf_path.name)
-
-                doc = fitz.open(pdf_path)
-                total_pages += len(doc)
-                doc.close()
+                # Count pages from a fresh open
+                with fitz.open(pdf_path) as doc:
+                    total_pages += len(doc)
             except Exception as e:
                 logger.error(f"Failed to extract {pdf_path.name}: {e} - skipping")
                 continue
