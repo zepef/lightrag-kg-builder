@@ -109,7 +109,10 @@ class PdfExtractor:
                     f"{pdf_path.name}: page {page_num + 1}/{total_pages}"
                 )
 
-        doc.close()
+        try:
+            doc.close()
+        except ValueError:
+            pass
 
         raw_text = '\n'.join(text_parts)
         cleaned = self._clean_text(raw_text)
