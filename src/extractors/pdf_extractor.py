@@ -150,7 +150,6 @@ class PdfExtractor:
             except Exception as e:
                 logger.error(f"Failed to extract {pdf_path.name}: {e} - skipping")
                 continue
-            doc.close()
 
         combined = '\n\n'.join(all_texts)
         combined = self._final_cleanup(combined)
