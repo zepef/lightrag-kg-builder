@@ -6,8 +6,11 @@ Uses PyMuPDF (fitz) for reliable extraction. Generic — works with any PDF,
 with optional cleanup patterns passed via configuration.
 """
 
+import logging
 import re
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from typing import Callable, Optional, List, Tuple
 from dataclasses import dataclass, field
 
@@ -91,9 +94,13 @@ class PdfExtractor:
         self._report_progress(0, total_pages, f"Extracting {pdf_path.name}")
 
         for page_num in range(total_pages):
-            page = doc[page_num]
-            text = page.get_text("text")
-            text_parts.append(text)
+            try:
+                page = doc[page_num]
+                text = page.get_text("text")
+                text_parts.append(text)
+            except (IndexError, Exception) as e:
+                logger.warning(f"{pdf_path.name}: skipping page {page_num}: {e}")
+                continue
 
             if (page_num + 1) % 10 == 0 or page_num == total_pages - 1:
                 self._report_progress(
@@ -132,12 +139,17 @@ class PdfExtractor:
         source_files = []
 
         for pdf_path in pdf_files:
-            text = self.extract_single(pdf_path)
-            all_texts.append(f"\n\n{'='*60}\n# SOURCE: {pdf_path.name}\n{'='*60}\n\n{text}")
-            source_files.append(pdf_path.name)
+            try:
+                text = self.extract_single(pdf_path)
+                all_texts.append(f"\n\n{'='*60}\n# SOURCE: {pdf_path.name}\n{'='*60}\n\n{text}")
+                source_files.append(pdf_path.name)
 
-            doc = fitz.open(pdf_path)
-            total_pages += len(doc)
+                doc = fitz.open(pdf_path)
+                total_pages += len(doc)
+                doc.close()
+            except Exception as e:
+                logger.error(f"Failed to extract {pdf_path.name}: {e} - skipping")
+                continue
             doc.close()
 
         combined = '\n\n'.join(all_texts)
