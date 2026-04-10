@@ -157,12 +157,17 @@ def load_or_extract_text(
         logger.info(f"Using cached extraction: {cached_path}")
         return cached_path.read_text(encoding='utf-8')
 
-    # Extract from PDFs
-    logger.info(f"Extracting text from PDFs in {sources_dir}...")
-    extractor = PdfExtractor(cleanup_patterns=cleanup_patterns or None)
-    result = extractor.extract_all(sources_dir)
-    combined_text = result.text
-    logger.info(f"Extracted {result.chars:,} chars from {result.pages} pages (PDFs)")
+    # Extract from PDFs (if any exist)
+    combined_text = ""
+    pdf_files = list(sources_dir.glob("*.pdf"))
+    if pdf_files:
+        logger.info(f"Extracting text from {len(pdf_files)} PDFs in {sources_dir}...")
+        extractor = PdfExtractor(cleanup_patterns=cleanup_patterns or None)
+        result = extractor.extract_all(sources_dir)
+        combined_text = result.text
+        logger.info(f"Extracted {result.chars:,} chars from {result.pages} pages (PDFs)")
+    else:
+        logger.info(f"No PDF files in {sources_dir}, skipping PDF extraction")
 
     # Also load .txt files from sources_dir
     txt_files = sorted(sources_dir.glob("*.txt"))
