@@ -80,8 +80,11 @@ def get_chunker(profile_name: str, max_chunk_size: int = 4000, min_chunk_size: i
     if profile_name == "pcg":
         from .chunkers.profiles.pcg import PCG_PROFILE
         return LegalDocumentChunker(PCG_PROFILE, max_chunk_size=max_chunk_size, min_chunk_size=min_chunk_size)
+    elif profile_name == "code-travail":
+        from .chunkers.profiles.code_travail import CODE_TRAVAIL_PROFILE
+        return LegalDocumentChunker(CODE_TRAVAIL_PROFILE, max_chunk_size=max_chunk_size, min_chunk_size=min_chunk_size)
     else:
-        raise ValueError(f"Unknown chunking profile: {profile_name}. Available: pcg")
+        raise ValueError(f"Unknown chunking profile: {profile_name}. Available: pcg, code-travail")
 
 
 # ============================================================================

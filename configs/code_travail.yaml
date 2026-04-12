@@ -1,0 +1,45 @@
+# Code du Travail - Knowledge Graph Build Configuration
+#
+# Usage:
+#   python -m src.cli build --config configs/code_travail.yaml --text-sources ../../data/raw/ --output /path/to/kg
+
+project:
+  name: "Code du Travail"
+
+chunking:
+  profile: code-travail     # Uses Code du Travail regex patterns and hierarchy
+  max_chunk_size: 4000      # ~1000 tokens per chunk
+  min_chunk_size: 500
+
+llm:
+  provider: vllm
+  vllm_url: http://localhost:8000/v1
+  ollama_url: http://localhost:11434
+  model: mistralai/Mistral-7B-Instruct-v0.3
+  embedding_model: nomic-embed-text
+  embedding_dim: 768
+
+extraction:
+  cleanup_patterns:
+    - ["Code du travail\\s*\\n", ""]
+    - ["Versions\\s*\\n\\s*Versions", ""]
+    - ["Liens relatifs\\s*\\n\\s*Liens relatifs", ""]
+    - ["Informations pratiques\\s*\\n\\s*Informations pratiques", ""]
+    - ["Replier\\s+", ""]
+    - ["D\u00e9plier\\s+", ""]
+
+finetune:
+  system_prompt: "Tu es un juriste specialise dans le droit du travail francais. Tu reponds de maniere precise et pedagogique aux questions sur le Code du Travail, en citant les articles de loi pertinents."
+  strategies:
+    - entity_def
+    - relational
+    - hierarchical
+    - comparative
+    - multihop
+    - chunk_qa
+    - thematic
+  format: openai
+  filters:
+    min_answer_length: 50
+    max_answer_length: 2000
+    deduplicate: true
