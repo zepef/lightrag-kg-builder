@@ -73,15 +73,33 @@ PRESETS = {
 # Chunking Profile Registry
 # ============================================================================
 
+def _load_profile(profile_name: str):
+    """Dynamically load a ChunkingProfile by name."""
+    # Built-in profiles
+    if profile_name == "pcg":
+        from .chunkers.profiles.pcg import PCG_PROFILE
+        return PCG_PROFILE
+    if profile_name == "code-travail":
+        from .chunkers.profiles.code_travail import CODE_TRAVAIL_PROFILE
+        return CODE_TRAVAIL_PROFILE
+
+    # Attempt dynamic import: "module.path:ATTRIBUTE"
+    if ":" in profile_name:
+        module_path, attr = profile_name.rsplit(":", 1)
+        import importlib
+        mod = importlib.import_module(module_path)
+        return getattr(mod, attr)
+
+    available = ["pcg", "code-travail"]
+    raise ValueError(f"Unknown chunking profile: {profile_name}. Available: {', '.join(available)}")
+
+
 def get_chunker(profile_name: str, max_chunk_size: int = 4000, min_chunk_size: int = 500):
     """Get a chunker for the given profile name."""
     from .chunkers.legal_chunker import LegalDocumentChunker
 
-    if profile_name == "pcg":
-        from .chunkers.profiles.pcg import PCG_PROFILE
-        return LegalDocumentChunker(PCG_PROFILE, max_chunk_size=max_chunk_size, min_chunk_size=min_chunk_size)
-    else:
-        raise ValueError(f"Unknown chunking profile: {profile_name}. Available: pcg")
+    profile = _load_profile(profile_name)
+    return LegalDocumentChunker(profile, max_chunk_size=max_chunk_size, min_chunk_size=min_chunk_size)
 
 
 # ============================================================================
